@@ -5,3 +5,4 @@ python-engineio
 requests
 python-telegram-bot==20.3
 eventlet
+gunicorn
