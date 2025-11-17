@@ -4,11 +4,11 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from state import user_rooms
 
-# this will be filled in from app.py
+# This will be injected from app.py
 update_user_page = None
 
-BOT_TOKEN = "8226029096:AAE49A_bGeK995UYAvW7hAdPjQ-ZNl-EQaQ"
-CHAT_ID = "1172641734"
+BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+CHAT_ID = "YOUR_CHAT_ID_HERE"
 
 def build_keyboard(room_id):
     return InlineKeyboardMarkup([
@@ -41,7 +41,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=q.message.chat_id, text="👋 Type your greeting:")
         return
 
-    # update page dynamically
     if update_user_page:
         update_user_page(room_id, page_name)
 
