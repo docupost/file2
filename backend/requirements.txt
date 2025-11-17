@@ -1,17 +1,6 @@
-# Flask web framework
 Flask==2.3.3
-
-# WebSocket support for Flask
 Flask-SocketIO==5.5.1
-
-# Python Socket.IO client/server library
 python-socketio>=5.12.0,<6
-
-# Python Engine.IO server library (required by Flask-SocketIO)
 python-engineio>=4.5.0,<5
-
-# Async worker for Flask-SocketIO (recommended for production)
 eventlet==0.33.3
-
-# Optional: for CORS support if your frontend is on another domain
-Flask-Cors==3.1.2
+Flask-Cors==3.0.10
