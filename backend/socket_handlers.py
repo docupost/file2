@@ -28,7 +28,4 @@ def register_socket_handlers(socketio):
 
         socketio.emit("update_page", html, room=room_id)
 
-    # Return for external use
     return update_user_page
-
-
