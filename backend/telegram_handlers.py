@@ -7,8 +7,8 @@ from state import user_rooms
 # This will be injected from app.py
 update_user_page = None
 
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
-CHAT_ID = "YOUR_CHAT_ID_HERE"
+BOT_TOKEN = "8226029096:AAE49A_bGeK995UYAvW7hAdPjQ-ZNl-EQaQ"
+CHAT_ID = "1172641734"
 
 def build_keyboard(room_id):
     return InlineKeyboardMarkup([
@@ -65,3 +65,4 @@ def start_telegram_bot():
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_greeting))
     app.run_polling()
+
